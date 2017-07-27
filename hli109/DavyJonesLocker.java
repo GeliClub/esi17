@@ -295,26 +295,7 @@ public class DavyJonesLocker extends Ship {
      */
     @Override
     public void doTurn(Arena arena) {
-        Coord thisShip = this.getCoord();
-        System.out.println("start at " + thisShip.getX() + ", " + thisShip.getY());
-        HashMap<Coord, ArrayList<Ship>> actions = getActions(arena);
-        for (Map.Entry<Coord, ArrayList<Ship>> entry : actions.entrySet()) { // print keys and values
-            if (entry.getKey() == null) {
-                System.out.println("null key");
-            }
-            else {
-                // print an accessible coordinate
-                System.out.print("Location " + entry.getKey().getX() + ", " + entry.getKey().getY() +": ");
-            }
-            // print attackable ships at the given location
-            for (Ship s : entry.getValue()) {
-                Coord c = s.getCoord();
-                System.out.print(s.getName() + " (" + c.getX() + ", " + c.getY() + "), ");
-            }
-            System.out.println();
-        }
-        System.out.println();
-        this.move(arena, Direction.EAST);
+        
     }
     
     private String getShipInfo(Ship ship) {
@@ -382,7 +363,33 @@ Helper
 
 */
 
-/* nextThreat Testing
+/* actionable testing
+    @Override
+    public void doTurn(Arena arena) {
+        Coord thisShip = this.getCoord();
+        System.out.println("start at " + thisShip.getX() + ", " + thisShip.getY());
+        HashMap<Coord, ArrayList<Ship>> actions = getActions(arena);
+        for (Map.Entry<Coord, ArrayList<Ship>> entry : actions.entrySet()) { // print keys and values
+            if (entry.getKey() == null) {
+                System.out.println("null key");
+            }
+            else {
+                // print an accessible coordinate
+                System.out.print("Location " + entry.getKey().getX() + ", " + entry.getKey().getY() +": ");
+            }
+            // print attackable ships at the given location
+            for (Ship s : entry.getValue()) {
+                Coord c = s.getCoord();
+                System.out.print(s.getName() + " (" + c.getX() + ", " + c.getY() + "), ");
+            }
+            System.out.println();
+        }
+        System.out.println();
+        this.move(arena, Direction.EAST);
+    }
+*/
+
+/* nextThreat testing
     @Override
     public void doTurn(Arena arena) {
         Coord thisShip = this.getCoord();
