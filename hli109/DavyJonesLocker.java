@@ -147,7 +147,6 @@ public class DavyJonesLocker extends Ship {
                 int[][] heatmap = new int[arena.getXSize()][arena.getYSize()];
                 for (Ship enemy : enemies) {
                     Coord enemyLoc = enemy.getCoord();
-                    System.out.println("loc: "+ enemyLoc.getX() + " " + enemyLoc.getY() + " MaxY: "+arena.getYSize());
                     int speed = enemy.getSpeed();
                     int range = enemy.getRange();
                     // if attacking one of the reachable will result in the ship sinking
