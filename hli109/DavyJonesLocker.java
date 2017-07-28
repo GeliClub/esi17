@@ -59,16 +59,27 @@ public class DavyJonesLocker extends Ship {
     //      If current ship has enough firepower to shoot down two ships
     //      The heatmap should account for two ships being destroyed instead of one
     
+    // Build the interface first...
+    //  You want something that will loop over the possible actions, given the ship's stats
+    //  Example: Firepower: 2, Speed: 2 
+    //      Possible combinations
+    //      F F M M
+    //      M M F F
+    //      F M F M
+    //      M F M F
+    //      M F F M
+    //      F M M F
+    
     private int count = 0;
     private int limit = 10;
     
     public DavyJonesLocker() {
         this.initializeName("Davy Jones Locker");
         this.initializeOwner("Nick");
-        this.initializeHull(1);
-        this.initializeFirepower(2);
+        this.initializeHull(2);
+        this.initializeFirepower(3);
         this.initializeSpeed(1);
-        this.initializeRange(2);
+        this.initializeRange(4);
     }
     
     private LinkedHashMap<Ship, int[][]> getThreats(Arena arena) {
@@ -213,6 +224,7 @@ public class DavyJonesLocker extends Ship {
         int speed = this.getSpeed();
         int range = this.getRange();
         Coord current = this.getCoord();
+        ArrayList<Coord> accessible = new ArrayList<>();
         
         // nested loop through the top corner of the current ship's speed to the bottom corner
         for (int x = current.getX() - speed; x <= current.getX() + speed; x++) {
@@ -335,16 +347,48 @@ public class DavyJonesLocker extends Ship {
     @Override
     public void doTurn(Arena arena) {
         
+        // filter yourself out of the ship list
+        ArrayList<Ship> enemies = (ArrayList<Ship>) this.getPriorities(arena, arena.getAllShips()).stream()
+            .filter((item) -> {
+                if (this.equals(item)) {
+                    return false;
+                }
+                return true;
+            }).collect(Collectors.toList());
+        
+        if (this.getTeam() == null) { // no team play
+            // Don't need to change enemies except remove yourself
+            //enemies = this.getPriorities(arena, arena.getAllShips()); // TODO: filter out yourself
+        }
+        else { // team play
+            enemies = (ArrayList<Ship>) enemies.stream() // TODO: filter out yourself
+                .filter((item) -> {
+                    if (this.isSameTeamAs(item)) { // check if ships are the same teams
+                        return false; // remove ships that are teams
+                    }
+                    return true;
+                }).collect(Collectors.toList());
+        }
+        
+        
         HashMap<Coord, ArrayList<Ship>> actions = this.getActions(arena);
         LinkedHashMap<Ship, int[][]> threats = this.getThreats(arena);
+        HashMap<Coord, Double> overlap = new HashMap<>();
         
-        Coord minThreatCoord = null; // coordinate with minimal threat
-        Ship minThreatTarget = null; // target to create such minimal threat
-        double minThreat = Double.POSITIVE_INFINITY; // threat value at coordinate (lower == safer)
+        for (Map.Entry<Coord, ArrayList<Ship>> move : actions.entrySet()) {
+            Coord loc = move.getKey();
+            double minThreat = Double.POSITIVE_INFINITY;
+            for (Map.Entry<Ship, int[][]> fire : threats.entrySet()) {
+                int[][] heatmap = fire.getValue();
+                if ((double)heatmap[loc.getX()][loc.getY()] < minThreat) {
+                    overlap.put(loc, minThreat);
+                }
+            }
+        }
         
         // actions should never be empty, there will always be one entry, which is the ship's current location
-        else if (actions.size() == 1) {
-            ArrayList<Ship> targets = this.getPriorities(arena, actions.getValue().get(0));
+        if (actions.size() == 1) {
+            ArrayList<Ship> targets = this.getPriorities(arena, actions.get(new Coord(this.getCoord().getX(), this.getCoord().getY())));
             // if there are still targets and we can still shoot
             while(targets.size() > 0 && this.getRemainingShots() > 0) {
                 Ship target = targets.remove(0);
@@ -352,31 +396,87 @@ public class DavyJonesLocker extends Ship {
                 // pick the first ship and try to shoot until it sinks
                 for (int f = target.getHealth(); f > 0; f--) {
                     this.fire(arena, fireLoc.getX(), fireLoc.getY());
-                    if (this.getRemainingShots == 0) // stop if there are no more shots
+                    if (this.getRemainingShots() == 0) // stop if there are no more shots
                         break;
                 }
             }
         }
         // The ship have a set of movement available
         else {
-            // start with a finite set of all accessbile location to this ship
-            for (Map.Entry<Coord, ArrayList<Ship>> move : actions.entrySet()) {
-                Coord loc = entry.getKey();
-                // check against all the targets, and the heatmap after attacking it
-                for (Map.Entry<Ship, int[][]> fire : threats.entrySet()) {
-                    int[][] heatmap = fire.getValue();
-                    if ((double)heatmap[loc.getX()][loc.getY()] < minThreat) {
-                        minThreat = (double) heatmap[loc.getX()][loc.getY()];
-                        minThreatCoord = loc;
-                        minThreatTarget = fire.getKey();
+            int loopLimit = 10;
+            int loopCout = 0;
+            while(this.getRemainingShots() > 0 && loopCout < loopLimit) {
+                
+                Coord minThreatCoord = null;
+                Ship minThreatTarget = null;
+                double minThreat = Double.POSITIVE_INFINITY;
+                
+                for (Map.Entry<Coord, ArrayList<Ship>> move : actions.entrySet()) {
+                    Coord loc = move.getKey();
+                    for (Map.Entry<Ship, int[][]> fire : threats.entrySet()) {
+                        int[][] heatmap = fire.getValue();
+                        if ((double)heatmap[loc.getX()][loc.getY()] < minThreat) {
+                            minThreat = (double) heatmap[loc.getX()][loc.getY()];
+                            minThreatTarget = fire.getKey();
+                            minThreatCoord = move.getKey();
+                        }
                     }
                 }
+                // minThreatCoord should never be null
+                // if at current location
+                Coord current = this.getCoord();
+                if (minThreatCoord.getX() == current.getX() && minThreatCoord.getY() == current.getY()) {
+                    if (minThreatTarget == null) {
+                    } else {
+                        for (int f = minThreatTarget.getHealth(); f > 0; f--) {
+                            this.fire(arena, minThreatTarget.getCoord().getX(), minThreatTarget.getCoord().getY());
+                            if (this.getRemainingShots() == 0) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                else {
+                    Direction delta = null;
+                    if (minThreatTarget == null) {
+                        boolean seek = true;
+                        for (Map.Entry<Coord, Double> cross : overlap.entrySet()) {
+                            if (cross.getValue() > 0) {
+                                seek = false;
+                                break;
+                            }
+                        }
+                        minThreatCoord = enemies.get(0).getCoord();
+                    }
+                    
+                    if (minThreatCoord.getX() > current.getX())
+                        delta = Direction.EAST;
+                    else if (minThreatCoord.getX() < current.getX())
+                        delta = Direction.WEST;
+                    else if (minThreatCoord.getY() > current.getY())
+                        delta = Direction.NORTH;
+                    else
+                        delta = Direction.SOUTH;
+                    
+                    boolean useFire = true;
+                    if (minThreatTarget == null) {
+                        useFire = false;
+                        
+                    }
+                    this.move(arena, delta);
+                    
+                    if (useFire) {
+                        for (int f = minThreatTarget.getHealth(); f > 0; f--) {
+                            this.fire(arena, minThreatTarget.getCoord().getX(), minThreatTarget.getCoord().getY());
+                            if (this.getRemainingShots() == 0) {
+                                break;
+                            }
+                        }                    
+                    }
+                }
+                loopCout++;
             }
         }
-        
- 
-        
-       
         
         // Case 1: getActions return an empty <keys, values> (size == 0) -> our ship is trapped in by other ships, (stay still) (Optimization: shoot ally if movement is really needed)
         
