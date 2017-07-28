@@ -34,6 +34,7 @@ public class DavyJonesLocker extends Ship {
         
         // for (String s : filterTest)
         //     System.out.println(s);
+        
     }
     
     // HashMap with the key as available movements, and value as available targets
@@ -67,7 +68,7 @@ public class DavyJonesLocker extends Ship {
         this.initializeHull(1);
         this.initializeFirepower(2);
         this.initializeSpeed(1);
-        this.initializeRange(6);
+        this.initializeRange(2);
     }
     
     private LinkedHashMap<Ship, int[][]> getThreats(Arena arena) {
@@ -143,6 +144,7 @@ public class DavyJonesLocker extends Ship {
         }
         else {
             // if there's a reachable ship then following this key's action will allow firing on a ship
+            // a ship that we can attack(possibly sink) that could have a different heatmap if sunk
             for (Ship attacked : reachable) {
                 int[][] heatmap = new int[arena.getXSize()][arena.getYSize()];
                 for (Ship enemy : enemies) {
@@ -190,12 +192,28 @@ public class DavyJonesLocker extends Ship {
         return result;
     }
     
+    // private HashSet<Coord> getReachableCoordRecur(Arena arena, int x, int y, int move, HashSet<Coord> res) {
+    //     if (move > 0) {
+    //         if (arena.getShipAt(x-1, y) == null || (this.getCoord().getX() == x && this.getCoord().getY() == y)) {
+    //             res.add(new Coord(x, y));
+    //         }
+    //         return getReachableCoordRecur(arena, x-1, y, move-1, res);
+    //         return getReachableCoordRecur(arena, x+1, y, move-1, res);
+    //         return getReachableCoordRecur(arena, x, y-1, move-1, res);
+    //         return getReachableCoordRecur(arena, x, y+1, move-1, res);
+    //         System.out.println("("+x+","+y+")");
+    //     }
+    //     return res;
+    // }
+    
+    //TODO: +2 Speed navigation, having something blocking you on one side will require moving around the object
+    //      which will require more movement in order to get around 
     private HashMap<Coord, ArrayList<Ship>> getActions(Arena arena) {
         HashMap<Coord, ArrayList<Ship>> result = new HashMap<>();
         int speed = this.getSpeed();
         int range = this.getRange();
         Coord current = this.getCoord();
-        ArrayList<Coord> accessible = new ArrayList<>();
+        
         // nested loop through the top corner of the current ship's speed to the bottom corner
         for (int x = current.getX() - speed; x <= current.getX() + speed; x++) {
             for (int y = current.getY() - speed; y <= current.getY() + speed; y++) {
@@ -214,6 +232,7 @@ public class DavyJonesLocker extends Ship {
                 }
             }
         }
+        
         // get a list of all ships, including yourself, teammates, and enemies
         ArrayList<Ship> enemies = this.getPriorities(arena, arena.getAllShips());
         
@@ -288,14 +307,101 @@ public class DavyJonesLocker extends Ship {
         return new ArrayList<Ship>(ships);
     }
     
+    
     /*
      * Determines what actions the ship will take on a given turn
      * @param arena (Arena) the battlefield for the match
      * @return void
      */
+    /*  Usage: getActions(arena) & getThreats(arena) 
+        getActions is used first to get a finite set of coordinate keys for possible movement (getActions includes not moving as an option)
+        Apply the set of accessible coordinate to the nextThreats 2D int array heatmap, and find a coordinate with a minimum value
+        
+    */
+    
+    
+    /* Thoughts
+        Generate the actions list
+            aggregate the ArrayList values to those that are the lowest hp and close together (close together is already implemented)
+            generate the threats heatmap with a key that can accept an ArrayList of Ship
+            Find which action's coordinate key that will give the lowest threats
+            
+        Optimization:
+            apply above alogrithm to different combination of move and fires
+        
+        Or...
+            Implement getThreats in such a way where the key is an ArrayList which means those are the possible shots/retargeting
+    */
     @Override
     public void doTurn(Arena arena) {
         
+        HashMap<Coord, ArrayList<Ship>> actions = this.getActions(arena);
+        LinkedHashMap<Ship, int[][]> threats = this.getThreats(arena);
+        
+        Coord minThreatCoord = null; // coordinate with minimal threat
+        Ship minThreatTarget = null; // target to create such minimal threat
+        double minThreat = Double.POSITIVE_INFINITY; // threat value at coordinate (lower == safer)
+        
+        // actions should never be empty, there will always be one entry, which is the ship's current location
+        else if (actions.size() == 1) {
+            ArrayList<Ship> targets = this.getPriorities(arena, actions.getValue().get(0));
+            // if there are still targets and we can still shoot
+            while(targets.size() > 0 && this.getRemainingShots() > 0) {
+                Ship target = targets.remove(0);
+                Coord fireLoc = target.getCoord();
+                // pick the first ship and try to shoot until it sinks
+                for (int f = target.getHealth(); f > 0; f--) {
+                    this.fire(arena, fireLoc.getX(), fireLoc.getY());
+                    if (this.getRemainingShots == 0) // stop if there are no more shots
+                        break;
+                }
+            }
+        }
+        // The ship have a set of movement available
+        else {
+            // start with a finite set of all accessbile location to this ship
+            for (Map.Entry<Coord, ArrayList<Ship>> move : actions.entrySet()) {
+                Coord loc = entry.getKey();
+                // check against all the targets, and the heatmap after attacking it
+                for (Map.Entry<Ship, int[][]> fire : threats.entrySet()) {
+                    int[][] heatmap = fire.getValue();
+                    if ((double)heatmap[loc.getX()][loc.getY()] < minThreat) {
+                        minThreat = (double) heatmap[loc.getX()][loc.getY()];
+                        minThreatCoord = loc;
+                        minThreatTarget = fire.getKey();
+                    }
+                }
+            }
+        }
+        
+ 
+        
+       
+        
+        // Case 1: getActions return an empty <keys, values> (size == 0) -> our ship is trapped in by other ships, (stay still) (Optimization: shoot ally if movement is really needed)
+        
+        // Case 2: getActions return an filled key, with all empty values -> we can move, but should check threat before moving
+        
+        // Case 3: 
+        
+        // HashMap<Coord, ArrayList<Ship>> actions = this.getActions(arena);
+        // LinkedHashMap<Ship, int[][]> threats = this.getThreats(arena);
+        
+        // Set<Coord> accessbile = actions.keySet();
+        
+        // for (Map.Entry<Ship, int[][]> entry : threats.entrySet()) { // print keys and values
+        //     // no ship can be attacked
+        //     if (entry.getKey() == null) { 
+        //         System.out.println("null key, no reachable ships...");
+        //     }
+        //     else {
+                
+        //         // print the target ship
+        //         //System.out.println(getShipInfo(entry.getKey()));
+        //     }
+        //     // print out 2D heatmap
+        //     //printHeatmap(entry.getValue());
+        // }
     }
     
     private String getShipInfo(Ship ship) {
